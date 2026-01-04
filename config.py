@@ -19,4 +19,5 @@ CHIEF_ADMIN_IDS = [int(id_str.strip()) for id_str in CHIEF_ADMIN_IDS_STR.split("
 DB_PATH = "mun_bot.db"
 
 # В config.py (в конец файла)
-TECH_SPECIALIST_ID = 7838905671# ← Твой ID для Главного Тех Специалиста7838905670
+TECH_SPECIALIST_ID = 7838905670# ← Твой ID для Главного Тех Специалиста7838905670
+
