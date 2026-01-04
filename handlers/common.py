@@ -432,16 +432,22 @@ async def save_support_appeal_with_photo(message: types.Message, state: FSMConte
 
     text = message.caption or "Без текста (только скриншот)"
 
+    # 🔹 Гарантируем, что пользователь есть
+    db_user = await get_or_create_user(
+        message.from_user.id,
+        message.from_user.full_name
+    )
+
     async with AsyncSessionLocal() as session:
-        user_id = (await session.execute(select(User.id).where(User.telegram_id == message.from_user.id))).scalar_one()
         req = SupportRequest(
-            user_id=user_id,
+            user_id=db_user.id,
             message=text,
-            screenshot_path=screenshot_path,  # ← Сохраняем путь
+            screenshot_path=screenshot_path,
             status="pending"
         )
         session.add(req)
         await session.commit()
+        await session.refresh(req)
 
         notify_text = (
             f"🆘 Новое обращение в техподдержку!\n\n"
@@ -449,17 +455,22 @@ async def save_support_appeal_with_photo(message: types.Message, state: FSMConte
             f"Текст: {text}\n"
             f"ID обращения: <code>{req.id}</code>"
         )
+
         try:
-            await message.bot.send_photo(TECH_SPECIALIST_ID, message.photo[-1].file_id, caption=notify_text)
+            await message.bot.send_photo(
+                TECH_SPECIALIST_ID,
+                message.photo[-1].file_id,
+                caption=notify_text
+            )
         except Exception as e:
             print(f"Ошибка отправки фото теху: {e}")
 
-    db_user = await get_or_create_user(message.from_user.id, message.from_user.full_name)
     await message.answer(
         "✅ Ваше обращение с скриншотом отправлено в техподдержку.\n"
         "Мы ответим вам в ближайшее время.",
         reply_markup=get_main_menu_keyboard(db_user.role)
     )
+
     await state.clear()
 
 @router.message(SupportAppeal.message, F.text)
@@ -535,5 +546,6 @@ async def block_if_banned(event):
                 "🚫 Вы заблокированы и не можете пользоваться ботом."
             )
         return True
+
 
     return False
