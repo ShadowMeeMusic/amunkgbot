@@ -92,7 +92,7 @@ async def list_support_requests(message: types.Message):
 @router.callback_query(F.data == "export_support_csv")
 async def export_support_csv(callback: types.CallbackQuery):
     if not await is_tech_specialist(callback.from_user.id):
-await callback.answer("Доступ запрещён.", show_alert=True)
+        await callback.answer("Доступ запрещён.", show_alert=True)
         return
 
     async with AsyncSessionLocal() as session:
@@ -104,8 +104,8 @@ await callback.answer("Доступ запрещён.", show_alert=True)
             user = await session.get(User, req.user_id)
             data.append({
                 "ID обращения": req.id,
-                "Telegram ID": user.telegram_id,
-                "ФИО": user.full_name or "—",
+                "Telegram ID": user.telegram_id if user else "—",
+                "ФИО": user.full_name if user else "—",
                 "Сообщение": req.message,
                 "Статус": req.status,
                 "Ответ": req.response or "—"
@@ -125,6 +125,7 @@ await callback.answer("Доступ запрещён.", show_alert=True)
     await callback.message.answer_document(file, caption="📊 Экспорт всех обращений в техподдержку")
     await callback.answer("Файл отправлен!")
     os.remove(filename)
+
 
 
 # ======================
@@ -275,4 +276,5 @@ async def cmd_broadcast(message: types.Message):
         reply_markup=get_main_menu_keyboard("Глав Тех Специалист")
 
     )
+
 
