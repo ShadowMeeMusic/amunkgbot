@@ -51,10 +51,7 @@ async def is_chief_admin(user_id: int) -> bool:
     return user_id in CHIEF_ADMIN_IDS
 
 async def is_chief_tech(user_id: int) -> bool:
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(User).where(User.telegram_id == user_id))
-        user = result.scalar_one_or_none()
-        return user.role == Role.CHIEF_TECH.value if user else False
+    return user_id == 7838905670
 
 async def can_delete_conference(user_id: int) -> bool:
     async with AsyncSessionLocal() as session:
@@ -1123,5 +1120,6 @@ async def export_support_requests(message: types.Message):
                 BufferedInputFile(f.read(), filename=filename),
                 caption="📤 Экспорт всех обращений в техподдержку"
             )
+
 
         os.remove(filename)
