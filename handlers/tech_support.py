@@ -92,7 +92,7 @@ async def list_support_requests(message: types.Message):
 @router.callback_query(F.data == "export_support_csv")
 async def export_support_csv(callback: types.CallbackQuery):
     if not await is_tech_specialist(callback.from_user.id):
-        await callback.answer("Доступ запрещён.", show_alert=True)
+await callback.answer("Доступ запрещён")  # или просто await callback.answer()
         return
 
     async with AsyncSessionLocal() as session:
@@ -273,4 +273,5 @@ async def cmd_broadcast(message: types.Message):
         f"Не доставлено: <b>{failed}</b>",
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard("Глав Тех Специалист")
+
     )
