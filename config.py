@@ -24,5 +24,8 @@ TECH_SPECIALIST_ID = int(os.getenv("TECH_SPECIALIST_ID"))
 async def is_chief_tech(user_id: int) -> bool:
     return user_id == 7838905670
 
+# В конце файла config.py добавь эту строку:
+TECH_SPECIALIST_ID = 7838905670  # ← ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ TELEGRAM ID!!!
+
 
 
