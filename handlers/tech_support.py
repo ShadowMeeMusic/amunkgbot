@@ -274,3 +274,4 @@ async def cmd_broadcast(message: types.Message):
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard("Глав Тех Специалист")
     )
+
