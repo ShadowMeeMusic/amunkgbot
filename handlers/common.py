@@ -31,6 +31,16 @@ from states import ParticipantRegistration, CreateConferenceRequest, SupportAppe
 from config import CHIEF_ADMIN_IDS, TECH_SPECIALIST_ID
 
 from aiogram import BaseMiddleware
+import logging
+
+logging.basicConfig(
+    filename="bot.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+def log_action(text: str):
+    logging.info(text)
 
 router = Router()
 
@@ -45,24 +55,17 @@ class BanMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         user_id = event.from_user.id
 
-        async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(User).where(User.telegram_id == user_id)
-            )
-            user = result.scalar_one_or_none()
+        user = await get_or_create_user(user_id, event.from_user)
 
-            if user and user.is_banned:
-                if isinstance(event, CallbackQuery):
-                    await event.answer(
-                        "🚫 Вы заблокированы и не можете пользоваться ботом.",
-                        show_alert=True
-                    )
-                else:
-                    await event.answer(
-                        "🚫 Вы заблокированы и не можете пользоваться ботом."
-                    )
-                return
+        if user.is_banned:
+            text = "🚫 Вы заблокированы и не можете пользоваться ботом."
+            if isinstance(event, CallbackQuery):
+                await event.answer(text, show_alert=True)
+            else:
+                await event.answer(text)
+            return
 
+        data["db_user"] = user  # полезно для других хендлеров
         return await handler(event, data)
 
 
@@ -372,7 +375,21 @@ async def finish_conference_creation(message: types.Message, state: FSMContext):
     data = await state.get_data()
 
     async with AsyncSessionLocal() as session:
-        user_id = (await session.execute(select(User.id).where(User.telegram_id == message.from_user.id))).scalar_one()
+        # Получаем или создаём пользователя
+        result = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(
+                telegram_id=message.from_user.id,
+                username=message.from_user.username,
+                full_name=message.from_user.full_name or message.from_user.first_name
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)  # чтобы получить user.id
+
+        user_id = user.id
         req = ConferenceCreationRequest(
             user_id=user_id,
             data=data,
@@ -475,16 +492,22 @@ async def save_support_appeal_with_photo(message: types.Message, state: FSMConte
 
 @router.message(SupportAppeal.message, F.text)
 async def save_support_appeal_text_only(message: types.Message, state: FSMContext):
+    # Используем готовую функцию
+    db_user = await get_or_create_user(
+        message.from_user.id,
+        message.from_user.full_name or message.from_user.first_name
+    )
+
     async with AsyncSessionLocal() as session:
-        user_id = (await session.execute(select(User.id).where(User.telegram_id == message.from_user.id))).scalar_one()
         req = SupportRequest(
-            user_id=user_id,
+            user_id=db_user.id,
             message=message.text,
             screenshot_path=None,
             status="pending"
         )
         session.add(req)
         await session.commit()
+        await session.refresh(req)
 
         notify_text = (
             f"🆘 Новое обращение в техподдержку!\n\n"
@@ -497,7 +520,6 @@ async def save_support_appeal_text_only(message: types.Message, state: FSMContex
         except Exception as e:
             print(f"Ошибка отправки текста теху: {e}")
 
-    db_user = await get_or_create_user(message.from_user.id, message.from_user.full_name)
     await message.answer(
         "✅ Ваше обращение отправлено в техподдержку.\n"
         "Мы ответим вам в ближайшее время.",
@@ -549,3 +571,19 @@ async def block_if_banned(event):
 
 
     return False
+
+@router.message(Command("stats"))
+async def stats(message: Message):
+    async with AsyncSessionLocal() as session:
+        users = await session.scalar(select(func.count(User.id)))
+        banned = await session.scalar(select(func.count(User.id)).where(User.is_banned))
+        confs = await session.scalar(select(func.count(Conference.id)))
+        apps = await session.scalar(select(func.count(Application.id)))
+
+    await message.answer(
+        f"📊 <b>Статистика</b>\n\n"
+        f"👤 Пользователи: {users}\n"
+        f"🚫 Забанены: {banned}\n"
+        f"🏛 Конференции: {confs}\n"
+        f"📄 Заявки: {apps}"
+    )
