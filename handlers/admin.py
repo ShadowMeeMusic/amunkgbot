@@ -1150,3 +1150,20 @@ async def export_support_requests(message: types.Message):
 
         os.remove(filename)
 
+@router.message(Command("backup_db"))
+async def backup_db(message: types.Message):
+    if message.from_user.id != TECH_SPECIALIST_ID:
+        await message.answer("🚫 Доступ запрещён.")
+        return
+
+    try:
+        with open("mun_bot.db", "rb") as db_file:
+            await message.answer_document(
+                BufferedInputFile(db_file.read(), filename=f"mun_bot_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.db"),
+                caption="✅ Бэкап базы данных mun_bot.db"
+            )
+        await message.answer("✅ Бэкап успешно отправлен!")
+    except FileNotFoundError:
+        await message.answer("❌ Ошибка: файл базы не найден (mun_bot.db).")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при отправке бэкапа: {e}")
