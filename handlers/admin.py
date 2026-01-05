@@ -8,6 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters.state import StateFilter
 import pandas as pd
 import os
+from aiogram.exceptions import TelegramBadRequest
 from datetime import datetime
 
 from database import (
@@ -51,7 +52,7 @@ async def is_chief_admin(user_id: int) -> bool:
     return user_id in CHIEF_ADMIN_IDS
 
 async def is_chief_tech(user_id: int) -> bool:
-    return user_id == 7838905670
+    return user_id == 7838905671
 
 async def can_delete_conference(user_id: int) -> bool:
     async with AsyncSessionLocal() as session:
@@ -919,7 +920,7 @@ async def show_support_request(target, enriched_requests: list, index: int):
         text += f"\n<b>Ответ:</b> {req.response}"
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="Ответить", callback_data=f"reply_support_{req.id}"))
+    builder.row(InlineKeyboardButton(text="📩 Ответить", callback_data=f"reply_support_{req.id}"))
 
     nav = []
     if index > 0:
@@ -931,31 +932,52 @@ async def show_support_request(target, enriched_requests: list, index: int):
 
     builder.row(InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_menu"))
 
-    if req.screenshot_path and os.path.exists(req.screenshot_path):
-        photo = FSInputFile(req.screenshot_path)
-        if isinstance(target, types.Message):
-            await target.answer_photo(photo, caption=text, reply_markup=builder.as_markup())
-        else:
-            await target.message.edit_media(
-                media=types.InputMediaPhoto(media=photo, caption=text),
-                reply_markup=builder.as_markup()
-            )
-    else:
-        if isinstance(target, types.Message):
-            await target.answer(text, reply_markup=builder.as_markup())
-        else:
-            await target.message.edit_text(text, reply_markup=builder.as_markup())
+    keyboard = builder.as_markup()
 
+    has_screenshot = req.screenshot_path and os.path.exists(req.screenshot_path)
+
+    if isinstance(target, types.Message):
+        # Первое сообщение — отправляем как есть
+        if has_screenshot:
+            photo = FSInputFile(req.screenshot_path)
+            await target.answer_photo(photo, caption=text, reply_markup=keyboard)
+        else:
+            await target.answer(text, reply_markup=keyboard)
+        return
+
+    # Это callback — редактируем
+    message = target.message
+
+    try:
+        if has_screenshot:
+            photo = FSInputFile(req.screenshot_path)
+            await message.edit_media(
+                media=types.InputMediaPhoto(media=photo, caption=text),
+                reply_markup=keyboard
+            )
+        else:
+            await message.edit_text(text, reply_markup=keyboard)
+    except TelegramBadRequest as e:
+        if "there is no text in the message to edit" in str(e) or "there is no media in the message" in str(e):
+            # Тип сообщения не совпадает — удаляем старое и отправляем новое
+            await message.delete()
+            if has_screenshot:
+                photo = FSInputFile(req.screenshot_path)
+                await target.bot.send_photo(message.chat.id, photo, caption=text, reply_markup=keyboard)
+            else:
+                await target.bot.send_message(message.chat.id, text, reply_markup=keyboard)
+        else:
+            raise e
+
+# Навигация по обращениям
 @router.callback_query(F.data.startswith("nav_support_"))
 async def navigate_support(callback: types.CallbackQuery):
-    # Убрали проверку роли — она уже пройдена в мидлваре или при входе
-
     index = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
-    
+
     data = support_pagination.get(user_id)
     if not data:
-        await callback.answer("🔄 Сессия устарела. Нажмите 'Обращения пользователей' заново.", show_alert=True)
+        await callback.answer("🔄 Сессия истекла. Нажмите кнопку заново.", show_alert=True)
         return
 
     total = len(data["requests"])
@@ -963,14 +985,10 @@ async def navigate_support(callback: types.CallbackQuery):
         await callback.answer("Конец списка.", show_alert=True)
         return
 
-    # Обновляем индекс
     data["index"] = index
-
-    # Показываем с анимацией "часиков гасим"
     await show_support_request(callback, data["requests"], index)
-    
-    # Добавляем маленький ответ, чтобы пользователь видел реакцию
     await callback.answer(f"{index + 1}/{total}")
+
 # Начало ответа
 @router.callback_query(F.data.startswith("reply_support_"))
 async def start_reply_support(callback: types.CallbackQuery, state: FSMContext):
@@ -1128,7 +1146,4 @@ async def export_support_requests(message: types.Message):
                 caption="📤 Экспорт всех обращений в техподдержку"
             )
 
-
         os.remove(filename)
-
-
