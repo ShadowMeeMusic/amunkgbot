@@ -20,9 +20,9 @@ DB_PATH = "mun_bot.db"
 
 # В config.py (в конец файла)
 # TECH_SPECIALIST_ID = 7838905670# ← Твой ID для Главного Тех Специалиста7838905670
-from config import TECH_SPECIALIST_ID
-
+TECH_SPECIALIST_ID = int(os.getenv("TECH_SPECIALIST_ID"))
 async def is_chief_tech(user_id: int) -> bool:
     return user_id == 7838905670
+
 
 
