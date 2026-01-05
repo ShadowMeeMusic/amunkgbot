@@ -104,8 +104,8 @@ async def export_support_csv(callback: types.CallbackQuery):
             user = await session.get(User, req.user_id)
             data.append({
                 "ID обращения": req.id,
-                "Telegram ID": user.telegram_id if user else "—",
-                "ФИО": user.full_name if user else "—",
+                "Telegram ID": user.telegram_id,
+                "ФИО": user.full_name or "—",
                 "Сообщение": req.message,
                 "Статус": req.status,
                 "Ответ": req.response or "—"
@@ -125,7 +125,6 @@ async def export_support_csv(callback: types.CallbackQuery):
     await callback.message.answer_document(file, caption="📊 Экспорт всех обращений в техподдержку")
     await callback.answer("Файл отправлен!")
     os.remove(filename)
-
 
 
 # ======================
@@ -274,7 +273,4 @@ async def cmd_broadcast(message: types.Message):
         f"Не доставлено: <b>{failed}</b>",
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard("Глав Тех Специалист")
-
     )
-
-
