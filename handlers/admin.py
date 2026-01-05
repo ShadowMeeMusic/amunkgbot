@@ -51,8 +51,10 @@ async def is_admin_or_chief(user_id: int) -> bool:
 async def is_chief_admin(user_id: int) -> bool:
     return user_id in CHIEF_ADMIN_IDS
 
+from config import TECH_SPECIALIST_ID
+
 async def is_chief_tech(user_id: int) -> bool:
-    return user_id == 7838905671
+    return user_id == TECH_SPECIALIST_ID
 
 async def can_delete_conference(user_id: int) -> bool:
     async with AsyncSessionLocal() as session:
@@ -1147,3 +1149,4 @@ async def export_support_requests(message: types.Message):
             )
 
         os.remove(filename)
+
