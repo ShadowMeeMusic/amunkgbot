@@ -946,17 +946,31 @@ async def show_support_request(target, enriched_requests: list, index: int):
         else:
             await target.message.edit_text(text, reply_markup=builder.as_markup())
 
-# Навигация по обращениям
 @router.callback_query(F.data.startswith("nav_support_"))
 async def navigate_support(callback: types.CallbackQuery):
-    # Временно отключено для теста
-    # if not await is_chief_tech(callback.from_user.id):
-    #     await callback.answer("Доступ запрещён.", show_alert=True)
-    #     return
+    # Убрали проверку роли — она уже пройдена в мидлваре или при входе
 
     index = int(callback.data.split("_")[-1])
-    # ... остальной код без изменений
+    user_id = callback.from_user.id
+    
+    data = support_pagination.get(user_id)
+    if not data:
+        await callback.answer("🔄 Сессия устарела. Нажмите 'Обращения пользователей' заново.", show_alert=True)
+        return
 
+    total = len(data["requests"])
+    if index < 0 or index >= total:
+        await callback.answer("Конец списка.", show_alert=True)
+        return
+
+    # Обновляем индекс
+    data["index"] = index
+
+    # Показываем с анимацией "часиков гасим"
+    await show_support_request(callback, data["requests"], index)
+    
+    # Добавляем маленький ответ, чтобы пользователь видел реакцию
+    await callback.answer(f"{index + 1}/{total}")
 # Начало ответа
 @router.callback_query(F.data.startswith("reply_support_"))
 async def start_reply_support(callback: types.CallbackQuery, state: FSMContext):
@@ -1116,4 +1130,5 @@ async def export_support_requests(message: types.Message):
 
 
         os.remove(filename)
+
 
